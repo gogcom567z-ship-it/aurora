@@ -1,0 +1,96 @@
+{
+  "projectSettings": {
+    "buildCommand": "npm run build",
+    "devCommand": "npm run dev",
+    "outputDirectory": ".next"
+  },
+  "env": {
+    "NEXTAUTH_URL": {
+      "description": "Auth URL - auto-set by Vercel"
+    },
+    "NEXTAUTH_SECRET": {
+      "description": "NextAuth Secret - must be set in Vercel Dashboard"
+    },
+    "DATABASE_URL": {
+      "description": "PostgreSQL Connection String"
+    },
+    "OPENAI_API_KEY": {
+      "description": "OpenAI API Key"
+    },
+    "STRIPE_SECRET_KEY": {
+      "description": "Stripe Secret Key"
+    }
+  },
+  "regions": ["iad1"],
+  "functions": {
+    "api/**": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "app/api/**": {
+      "maxDuration": 60
+    }
+  },
+  "redirects": [
+    {
+      "source": "/dashboard",
+      "destination": "/dashboard/overview",
+      "permanent": false
+    },
+    {
+      "source": "/admin",
+      "destination": "/admin/dashboard",
+      "permanent": false
+    },
+    {
+      "source": "/academy",
+      "destination": "/academy/beginner",
+      "permanent": false
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=60, s-maxage=120"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ]
+    },
+    {
+      "source": "/:path*",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    }
+  ],
+  "buildenv": {
+    "NODE_ENV": "production"
+  },
+  "integrations": [
+    {
+      "id": "oac_xxx",
+      "type": "github"
+    }
+  ]
+}
