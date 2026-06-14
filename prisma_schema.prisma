@@ -1,0 +1,534 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===== AUTHENTICATION =====
+
+model User {
+  id                    String                 @id @default(cuid())
+  email                 String                 @unique
+  password              String?
+  name                  String?
+  avatar                String?
+  role                  UserRole               @default(USER)
+  membership            MembershipTier         @default(BASIC)
+  
+  // Profile
+  bio                   String?
+  location              String?
+  website               String?
+  language              String                 @default("de")
+  timezone              String                 @default("Europe/Berlin")
+  
+  // Preferences
+  theme                 String                 @default("dark")
+  notifications         NotificationPreferences?
+  dashboardLayout       Json?                  @default("{}")
+  
+  // Status
+  emailVerified         DateTime?
+  lastLogin             DateTime?
+  isActive              Boolean                @default(true)
+  
+  // Relationships
+  accounts              Account[]
+  sessions              Session[]
+  apiKeys               ApiKey[]
+  portfolio             Portfolio?
+  trades                Trade[]
+  watchlists            Watchlist[]
+  signals               Signal[]
+  newsPreferences       NewsPreference[]
+  academy               AcademyProgress[]
+  certificates          Certificate[]
+  notifications         Notification[]
+  supportTickets        SupportTicket[]
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@index([email])
+  @@index([role])
+  @@index([membership])
+}
+
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum MembershipTier {
+  BASIC
+  PRO
+  VIP
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?  @db.Text
+  access_token       String?  @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?  @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String   @unique
+  name      String
+  lastUsed  DateTime?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model NotificationPreferences {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  
+  // Push Notifications
+  marketAlerts       Boolean  @default(true)
+  signalAlerts       Boolean  @default(true)
+  newsAlerts         Boolean  @default(true)
+  portfolioAlerts    Boolean  @default(true)
+  
+  // Email
+  emailFrequency     String   @default("daily") // never, daily, weekly
+  emailNewsletters   Boolean  @default(true)
+  
+  // Other
+  soundEnabled       Boolean  @default(true)
+  
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ===== PORTFOLIO =====
+
+model Portfolio {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  
+  // Balances
+  totalBalance          Decimal  @default(0) @db.Decimal(20, 2)
+  availableBalance      Decimal  @default(0) @db.Decimal(20, 2)
+  usedMargin            Decimal  @default(0) @db.Decimal(20, 2)
+  
+  // Performance
+  totalProfit           Decimal  @default(0) @db.Decimal(20, 2)
+  totalLoss             Decimal  @default(0) @db.Decimal(20, 2)
+  winRate               Decimal  @default(0) @db.Decimal(5, 2)
+  
+  // Risk
+  dayLoss               Decimal  @default(0) @db.Decimal(20, 2)
+  weekLoss              Decimal  @default(0) @db.Decimal(20, 2)
+  monthLoss             Decimal  @default(0) @db.Decimal(20, 2)
+  maxDrawdown           Decimal  @default(0) @db.Decimal(5, 2)
+  
+  // Settings
+  riskLevel             String   @default("moderate") // low, moderate, high
+  maxDailyLoss          Decimal  @default(1000) @db.Decimal(20, 2)
+  maxWeeklyLoss         Decimal  @default(5000) @db.Decimal(20, 2)
+  maxMonthlyLoss        Decimal  @default(10000) @db.Decimal(20, 2)
+  
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  positions             Position[]
+  trades                Trade[]
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Position {
+  id                    String   @id @default(cuid())
+  portfolioId           String
+  
+  symbol                String
+  direction             String   // LONG, SHORT
+  size                  Decimal  @db.Decimal(20, 8)
+  entryPrice            Decimal  @db.Decimal(20, 8)
+  currentPrice          Decimal  @db.Decimal(20, 8)
+  unrealizedPnL         Decimal  @db.Decimal(20, 2)
+  
+  stopLoss              Decimal? @db.Decimal(20, 8)
+  takeProfit            Decimal? @db.Decimal(20, 8)
+  
+  openedAt              DateTime @default(now())
+  closedAt              DateTime?
+  status                String   @default("open") // open, closed, cancelled
+  
+  portfolio             Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  trades                Trade[]
+
+  @@index([portfolioId])
+  @@index([symbol])
+  @@index([status])
+}
+
+model Trade {
+  id                    String   @id @default(cuid())
+  userId                String
+  portfolioId           String
+  positionId            String?
+  
+  symbol                String
+  direction             String   // LONG, SHORT
+  
+  entryPrice            Decimal  @db.Decimal(20, 8)
+  exitPrice             Decimal? @db.Decimal(20, 8)
+  size                  Decimal  @db.Decimal(20, 8)
+  
+  pnl                   Decimal? @db.Decimal(20, 2)
+  pnlPercent            Decimal? @db.Decimal(5, 2)
+  
+  status                String   @default("open") // open, closed, cancelled
+  
+  openedAt              DateTime @default(now())
+  closedAt              DateTime?
+  
+  signalId              String?
+  notes                 String?
+  
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  portfolio             Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  position              Position? @relation(fields: [positionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([symbol])
+  @@index([status])
+}
+
+// ===== WATCHLIST =====
+
+model Watchlist {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  isDefault Boolean  @default(false)
+  
+  markets   WatchlistItem[]
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model WatchlistItem {
+  id          String    @id @default(cuid())
+  watchlistId String
+  symbol      String
+  
+  watchlist   Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+
+  @@unique([watchlistId, symbol])
+}
+
+// ===== SIGNALS =====
+
+model Signal {
+  id                    String   @id @default(cuid())
+  userId                String
+  
+  symbol                String
+  direction             String   // LONG, SHORT
+  status                String   @default("active") // active, closed, missed, rejected
+  
+  entryPrice            Decimal  @db.Decimal(20, 8)
+  stopLoss              Decimal  @db.Decimal(20, 8)
+  takeProfits           Json     // Array of {price, label}
+  
+  confidence            Decimal  @db.Decimal(5, 2)
+  riskReward            Decimal  @db.Decimal(5, 2)
+  
+  strategy              String
+  analysis              String?  @db.Text
+  
+  closedPrice           Decimal? @db.Decimal(20, 8)
+  closedAt              DateTime?
+  
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([userId])
+  @@index([symbol])
+  @@index([status])
+}
+
+// ===== NEWS =====
+
+model News {
+  id                    String   @id @default(cuid())
+  
+  title                 String
+  description           String?  @db.Text
+  content               String?  @db.Text
+  source                String
+  sourceUrl             String
+  imageUrl              String?
+  
+  sentiment             String   // positive, negative, neutral
+  impact                String   // low, medium, high
+  affectedMarkets       String[] // Array of symbols
+  
+  publishedAt           DateTime
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([publishedAt])
+  @@index([sentiment])
+  @@index([impact])
+}
+
+model NewsPreference {
+  id        String  @id @default(cuid())
+  userId    String
+  symbol    String
+  enabled   Boolean @default(true)
+  
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, symbol])
+}
+
+// ===== ACADEMY =====
+
+model Academy {
+  id          String   @id @default(cuid())
+  level       String   // BEGINNER, INTERMEDIATE, ADVANCED, ELITE
+  title       String
+  description String?  @db.Text
+  
+  chapters    Chapter[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Chapter {
+  id          String   @id @default(cuid())
+  academyId   String
+  title       String
+  description String?  @db.Text
+  order       Int
+  
+  lessons     Lesson[]
+  academy     Academy  @relation(fields: [academyId], references: [id], onDelete: Cascade)
+
+  @@index([academyId])
+}
+
+model Lesson {
+  id          String   @id @default(cuid())
+  chapterId   String
+  title       String
+  content     String   @db.Text
+  videoUrl    String?
+  order       Int
+  
+  chapter     Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  quiz        Quiz?
+  progress    AcademyProgress[]
+
+  @@index([chapterId])
+}
+
+model Quiz {
+  id        String   @id @default(cuid())
+  lessonId  String   @unique
+  questions String   @db.Text // JSON array
+  
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+}
+
+model AcademyProgress {
+  id        String   @id @default(cuid())
+  userId    String
+  lessonId  String
+  
+  completed Boolean  @default(false)
+  score     Decimal? @db.Decimal(5, 2)
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+}
+
+model Certificate {
+  id          String   @id @default(cuid())
+  userId      String
+  level       String   // BEGINNER, INTERMEDIATE, ADVANCED, ELITE
+  
+  issuedAt    DateTime @default(now())
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, level])
+}
+
+// ===== SUPPORT =====
+
+model SupportTicket {
+  id          String   @id @default(cuid())
+  userId      String
+  
+  subject     String
+  description String   @db.Text
+  status      String   @default("open") // open, in-progress, resolved, closed
+  priority    String   @default("normal") // low, normal, high, urgent
+  
+  messages    SupportMessage[]
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model SupportMessage {
+  id        String   @id @default(cuid())
+  ticketId  String
+  
+  authorId  String?  // null if admin response
+  message   String   @db.Text
+  
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+}
+
+// ===== NOTIFICATIONS =====
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  
+  type      String   // SIGNAL, NEWS, ALERT, UPDATE
+  title     String
+  message   String   @db.Text
+  data      Json?
+  
+  read      Boolean  @default(false)
+  readAt    DateTime?
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([read])
+}
+
+// ===== ADMIN & CONFIGURATION =====
+
+model Configuration {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.Text
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  entityType String
+  entityId  String
+  changes   Json?
+  
+  userId    String?
+  
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([entityType])
+  @@index([createdAt])
+}
+
+// ===== MARKETPLACE =====
+
+model Strategy {
+  id          String   @id @default(cuid())
+  creatorId   String?
+  
+  name        String
+  description String   @db.Text
+  
+  content     String   @db.Text
+  rules       Json?
+  
+  price       Decimal  @default(0) @db.Decimal(10, 2)
+  isPublic    Boolean  @default(false)
+  
+  purchases   StrategyPurchase[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model StrategyPurchase {
+  id        String   @id @default(cuid())
+  userId    String
+  strategyId String
+  
+  strategy  Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+
+  @@unique([userId, strategyId])
+}
